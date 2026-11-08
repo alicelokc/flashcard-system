@@ -1,0 +1,125 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Roles: TEACHER | STUDENT (stored as String — SQLite has no enums)
+// CardStatus: DRAFT | PENDING | APPROVED | REJECTED
+
+model User {
+  id             String   @id @default(cuid())
+  email          String   @unique
+  passwordHash   String
+  name           String
+  role           String   @default("STUDENT")
+  dailyGoal      Int      @default(10)
+  currentStreak  Int      @default(0)
+  longestStreak  Int      @default(0)
+  lastStudyDate  String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  decksCreated   Deck[]           @relation("DeckCreator")
+  cardsSubmitted Card[]           @relation("CardSubmitter")
+  cardsReviewed  Card[]           @relation("CardReviewer")
+  assignments    DeckAssignment[]
+  cardStates     CardState[]
+  reviewLogs     ReviewLog[]
+  unfamiliar     UnfamiliarFlag[]
+}
+
+model Deck {
+  id          String   @id @default(cuid())
+  title       String
+  subject     String   @default("")
+  description String   @default("")
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  createdBy   User             @relation("DeckCreator", fields: [createdById], references: [id])
+  cards       Card[]
+  assignments DeckAssignment[]
+}
+
+model DeckAssignment {
+  id         String   @id @default(cuid())
+  deckId     String
+  studentId  String
+  assignedAt DateTime @default(now())
+
+  deck    Deck @relation(fields: [deckId], references: [id], onDelete: Cascade)
+  student User @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([deckId, studentId])
+}
+
+model Card {
+  id              String    @id @default(cuid())
+  deckId          String
+  frontText       String
+  backText        String
+  frontImage      String?
+  backImage       String?
+  status          String    @default("APPROVED")
+  submittedById   String?
+  reviewedById    String?
+  reviewedAt      DateTime?
+  rejectionReason String?
+  sortOrder       Int       @default(0)
+  archived        Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  deck        Deck              @relation(fields: [deckId], references: [id], onDelete: Cascade)
+  submittedBy User?             @relation("CardSubmitter", fields: [submittedById], references: [id])
+  reviewedBy  User?             @relation("CardReviewer", fields: [reviewedById], references: [id])
+  states      CardState[]
+  reviews     ReviewLog[]
+  unfamiliar  UnfamiliarFlag[]
+}
+
+model CardState {
+  id          String   @id @default(cuid())
+  cardId      String
+  studentId   String
+  easeFactor  Float    @default(2.5)
+  interval    Int      @default(0)
+  repetitions Int      @default(0)
+  nextReview  DateTime @default(now())
+  lastResult  Int?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  card    Card @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  student User @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([cardId, studentId])
+}
+
+model ReviewLog {
+  id         String   @id @default(cuid())
+  cardId     String
+  studentId  String
+  rating     Int
+  reviewedAt DateTime @default(now())
+
+  card    Card @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  student User @relation(fields: [studentId], references: [id], onDelete: Cascade)
+}
+
+model UnfamiliarFlag {
+  id        String   @id @default(cuid())
+  cardId    String
+  studentId String
+  createdAt DateTime @default(now())
+
+  card    Card @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  student User @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([cardId, studentId])
+}
