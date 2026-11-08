@@ -30,6 +30,7 @@ function DeckDetailInner() {
   const [frontImage, setFrontImage] = useState<string | null>(null);
   const [backImage, setBackImage] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
 
   function load() {
     fetch(`/api/decks/${id}`).then((r) => r.json()).then(setDeck);
@@ -42,11 +43,16 @@ function DeckDetailInner() {
 
   async function upload(file: File, side: "front" | "back") {
     setUploading(true);
+    setUploadError("");
     const fd = new FormData();
     fd.append("file", file);
     const res = await fetch("/api/upload", { method: "POST", body: fd });
     const data = await res.json();
     setUploading(false);
+    if (!res.ok) {
+      setUploadError(data.error || "Upload failed");
+      return;
+    }
     if (data.url) {
       if (side === "front") setFrontImage(data.url);
       else setBackImage(data.url);
@@ -70,6 +76,7 @@ function DeckDetailInner() {
     setBack("");
     setFrontImage(null);
     setBackImage(null);
+    setUploadError("");
     load();
   }
 
@@ -102,33 +109,50 @@ function DeckDetailInner() {
           required
         />
         <div className="grid gap-3 sm:grid-cols-2">
-          <label className="text-sm">
-            正面圖片
+          <div className="space-y-1 text-sm">
+            <label className="block">
+              正面圖片（上傳 &lt;500KB）
+              <input
+                type="file"
+                accept="image/*"
+                className="mt-1 block w-full text-sm"
+                onChange={(e) => e.target.files?.[0] && upload(e.target.files[0], "front")}
+              />
+            </label>
             <input
-              type="file"
-              accept="image/*"
-              className="mt-1 block w-full text-sm"
-              onChange={(e) => e.target.files?.[0] && upload(e.target.files[0], "front")}
+              className="w-full rounded-lg border px-3 py-1.5 text-sm"
+              placeholder="或貼上圖片 URL"
+              value={frontImage?.startsWith("data:") ? "" : frontImage || ""}
+              onChange={(e) => setFrontImage(e.target.value.trim() || null)}
             />
             {frontImage && (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={frontImage} alt="" className="mt-1 h-20 object-contain" />
             )}
-          </label>
-          <label className="text-sm">
-            背面圖片
+          </div>
+          <div className="space-y-1 text-sm">
+            <label className="block">
+              背面圖片（上傳 &lt;500KB）
+              <input
+                type="file"
+                accept="image/*"
+                className="mt-1 block w-full text-sm"
+                onChange={(e) => e.target.files?.[0] && upload(e.target.files[0], "back")}
+              />
+            </label>
             <input
-              type="file"
-              accept="image/*"
-              className="mt-1 block w-full text-sm"
-              onChange={(e) => e.target.files?.[0] && upload(e.target.files[0], "back")}
+              className="w-full rounded-lg border px-3 py-1.5 text-sm"
+              placeholder="或貼上圖片 URL"
+              value={backImage?.startsWith("data:") ? "" : backImage || ""}
+              onChange={(e) => setBackImage(e.target.value.trim() || null)}
             />
             {backImage && (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={backImage} alt="" className="mt-1 h-20 object-contain" />
             )}
-          </label>
+          </div>
         </div>
+        {uploadError && <p className="text-sm text-red-600">{uploadError}</p>}
         <button
           type="submit"
           disabled={uploading}

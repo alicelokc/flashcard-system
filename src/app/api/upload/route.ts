@@ -1,9 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { writeFile, mkdir } from "fs/promises";
-import path from "path";
-import { randomBytes } from "crypto";
+
+/** Max raw file size for embedding as a data URL in Postgres (Vercel has no writable FS). */
+const MAX_BYTES = 500 * 1024;
+
+const MIME: Record<string, string> = {
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".png": "image/png",
+  ".gif": "image/gif",
+  ".webp": "image/webp",
+  ".svg": "image/svg+xml",
+};
+
+export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -13,12 +24,24 @@ export async function POST(req: NextRequest) {
   const file = form.get("file") as File | null;
   if (!file) return NextResponse.json({ error: "No file" }, { status: 400 });
 
-  const bytes = Buffer.from(await file.arrayBuffer());
-  const ext = path.extname(file.name) || ".jpg";
-  const name = `${Date.now()}-${randomBytes(6).toString("hex")}${ext}`;
-  const dir = path.join(process.cwd(), "public", "uploads");
-  await mkdir(dir, { recursive: true });
-  await writeFile(path.join(dir, name), bytes);
+  if (file.size > MAX_BYTES) {
+    return NextResponse.json(
+      {
+        error: `Image too large (${Math.round(file.size / 1024)}KB). Max ${MAX_BYTES / 1024}KB, or paste an image URL instead.`,
+      },
+      { status: 400 }
+    );
+  }
 
-  return NextResponse.json({ url: `/uploads/${name}` });
+  const bytes = Buffer.from(await file.arrayBuffer());
+  const name = (file.name || "image").toLowerCase();
+  const extMatch = name.match(/\.[a-z0-9]+$/);
+  const ext = extMatch ? extMatch[0] : "";
+  const mime =
+    file.type && file.type.startsWith("image/")
+      ? file.type
+      : MIME[ext] || "image/jpeg";
+
+  const dataUrl = `data:${mime};base64,${bytes.toString("base64")}`;
+  return NextResponse.json({ url: dataUrl });
 }

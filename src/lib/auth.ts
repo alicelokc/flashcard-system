@@ -3,7 +3,13 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import { compare } from "bcryptjs";
 import { prisma } from "./prisma";
 
+// On Vercel, prefer explicit NEXTAUTH_URL; fall back to https://VERCEL_URL for previews.
+if (!process.env.NEXTAUTH_URL && process.env.VERCEL_URL) {
+  process.env.NEXTAUTH_URL = `https://${process.env.VERCEL_URL}`;
+}
+
 export const authOptions: NextAuthOptions = {
+  secret: process.env.NEXTAUTH_SECRET,
   session: { strategy: "jwt" },
   pages: { signIn: "/login" },
   providers: [
@@ -41,7 +47,9 @@ export const authOptions: NextAuthOptions = {
     async session({ session, token }) {
       if (session.user) {
         (session.user as { id?: string }).id = token.id as string;
-        (session.user as { role?: "TEACHER" | "STUDENT" }).role = token.role as "TEACHER" | "STUDENT";
+        (session.user as { role?: "TEACHER" | "STUDENT" }).role = token.role as
+          | "TEACHER"
+          | "STUDENT";
       }
       return session;
     },

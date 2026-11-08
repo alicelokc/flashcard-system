@@ -3,12 +3,13 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
-// Roles: TEACHER | STUDENT (stored as String — SQLite has no enums)
+// Roles: TEACHER | STUDENT (stored as String)
 // CardStatus: DRAFT | PENDING | APPROVED | REJECTED
+// frontImage / backImage store https URLs or small data: URLs (Vercel-safe MVP)
 
 model User {
   id             String   @id @default(cuid())
