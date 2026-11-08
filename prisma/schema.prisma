@@ -3,7 +3,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  // Local: sqlite via DATABASE_URL="file:./dev.db"
+  // Production (Vercel/Neon): change provider to "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
@@ -14,8 +16,9 @@ datasource db {
 model User {
   id             String   @id @default(cuid())
   email          String   @unique
-  passwordHash   String
+  passwordHash   String?  // unused — Google OAuth only; kept optional for schema compat
   name           String
+  image          String?
   role           String   @default("STUDENT")
   dailyGoal      Int      @default(10)
   currentStreak  Int      @default(0)

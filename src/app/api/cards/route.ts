@@ -63,7 +63,7 @@ export async function PATCH(req: NextRequest) {
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json();
-  const { id, frontText, backText, frontImage, backImage, submit } = body;
+  const { id, frontText, backText, frontImage, backImage, submit, archived } = body;
   if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 
   const existing = await prisma.card.findUnique({ where: { id } });
@@ -77,6 +77,7 @@ export async function PATCH(req: NextRequest) {
         backText: backText?.trim() ?? existing.backText,
         frontImage: frontImage === undefined ? existing.frontImage : frontImage,
         backImage: backImage === undefined ? existing.backImage : backImage,
+        ...(typeof archived === "boolean" ? { archived } : {}),
       },
     });
     return NextResponse.json(card);

@@ -1,9 +1,14 @@
 import { PrismaClient } from "@prisma/client";
-import { hash } from "bcryptjs";
 import { subDays } from "date-fns";
 
 const prisma = new PrismaClient();
 
+/**
+ * Seed sample decks/cards for local demo.
+ * Login is Google-only — credentials are gone.
+ * Teacher user email comes from the first TEACHER_EMAILS entry so Alice's
+ * Google sign-in reuses the same User row and owns the seeded decks.
+ */
 async function main() {
   await prisma.reviewLog.deleteMany();
   await prisma.unfamiliarFlag.deleteMany();
@@ -13,13 +18,15 @@ async function main() {
   await prisma.deck.deleteMany();
   await prisma.user.deleteMany();
 
-  const teacherHash = await hash("teacher123", 10);
-  const studentHash = await hash("student123", 10);
+  const teacherEmail =
+    (process.env.TEACHER_EMAILS || "")
+      .split(",")
+      .map((e) => e.trim().toLowerCase())
+      .filter(Boolean)[0] || "teacher@seed.local";
 
   const teacher = await prisma.user.create({
     data: {
-      email: "teacher@demo.local",
-      passwordHash: teacherHash,
+      email: teacherEmail,
       name: "Alice 老師",
       role: "TEACHER",
     },
@@ -27,8 +34,7 @@ async function main() {
 
   const student1 = await prisma.user.create({
     data: {
-      email: "student1@demo.local",
-      passwordHash: studentHash,
+      email: "student1@seed.local",
       name: "陳小明",
       role: "STUDENT",
       currentStreak: 3,
@@ -40,8 +46,7 @@ async function main() {
 
   const student2 = await prisma.user.create({
     data: {
-      email: "student2@demo.local",
-      passwordHash: studentHash,
+      email: "student2@seed.local",
       name: "李美華",
       role: "STUDENT",
       currentStreak: 1,
@@ -180,10 +185,10 @@ async function main() {
     data: { cardId: createdCards[3].id, studentId: student2.id },
   });
 
-  console.log("Seed complete:");
-  console.log("  Teacher: teacher@demo.local / teacher123");
-  console.log("  Student: student1@demo.local / student123");
-  console.log("  Student: student2@demo.local / student123");
+  console.log("Seed complete (Google login only — no password accounts):");
+  console.log(`  Teacher user: ${teacherEmail} (must be in TEACHER_EMAILS)`);
+  console.log("  Placeholder students: student1@seed.local, student2@seed.local");
+  console.log("  Real students sign in with Google and get STUDENT role automatically.");
 }
 
 function formatHk(date: Date): string {

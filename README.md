@@ -2,24 +2,26 @@
 
 Production-minded **MVP** for teachers and students: create decks/cards, student submissions with teacher approval (class-wide), SM-2 study, unfamiliar flags, progress, 儲火 streaks, and a class leaderboard.
 
-**Database: PostgreSQL** (required for Vercel serverless). Free hosts: [Neon](https://neon.tech), Vercel Postgres, or Supabase.
+**Auth: Google sign-in only** (NextAuth Google provider). Teachers are allowlisted via `TEACHER_EMAILS`.
+
+**Database:** local SQLite (`file:./dev.db`) or **PostgreSQL** for Vercel. Free hosts: [Neon](https://neon.tech), Vercel Postgres, or Supabase. For Postgres production, set `provider = "postgresql"` in `prisma/schema.prisma`.
 
 ## Stack
 
 - Next.js 14 (App Router) + TypeScript + Tailwind CSS
-- Prisma + **PostgreSQL**
-- NextAuth.js credentials (bcrypt) with `NEXTAUTH_URL` (falls back to `VERCEL_URL` on Vercel)
+- Prisma + SQLite (local) / PostgreSQL (production)
+- NextAuth.js **Google** provider with `NEXTAUTH_URL` (falls back to `VERCEL_URL` on Vercel)
 - Images: paste a public URL, or upload small files (&lt;500KB) stored as **data URLs** in the DB (no writable filesystem on Vercel)
 - Timezone for streak/day boundaries: **Asia/Hong_Kong**
 
 ## Quick start (local)
 
-1. Create a free Postgres DB (Neon recommended) and copy the connection string.
+1. Create a Google OAuth **Web** client (see below).
 2. Configure env:
 
 ```bash
 cp .env.example .env
-# edit DATABASE_URL, NEXTAUTH_URL, NEXTAUTH_SECRET
+# edit GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, TEACHER_EMAILS, NEXTAUTH_SECRET
 ```
 
 3. Install, push schema, seed, run:
@@ -31,43 +33,42 @@ npm run seed
 npm run dev
 ```
 
-Open http://localhost:3000
+Open http://localhost:3000 and click **使用 Google 登入**.
 
-### Demo logins
+### Google OAuth setup
 
-| Role    | Email                 | Password    |
-|---------|-----------------------|-------------|
-| Teacher | `teacher@demo.local`  | `teacher123`|
-| Student | `student1@demo.local` | `student123`|
-| Student | `student2@demo.local` | `student123`|
+1. Open [Google Cloud Console → Credentials](https://console.cloud.google.com/apis/credentials).
+2. Create **OAuth client ID** → Application type **Web application**.
+3. Add **Authorized redirect URIs**:
+   - `http://localhost:3000/api/auth/callback/google`
+   - `https://YOUR_DOMAIN/api/auth/callback/google` (production)
+4. Copy Client ID / Secret into `.env` as `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`.
+5. Set `TEACHER_EMAILS` to a comma-separated list of teacher Gmail addresses, e.g. `lokcalice@gmail.com`. Everyone else who signs in becomes a **STUDENT**.
+
+Seed creates sample decks/cards owned by the first email in `TEACHER_EMAILS` (so your Google teacher account sees them after login). Placeholder student rows (`student1@seed.local`) exist only for demo leaderboard data — real students use Google.
 
 ## Deploy to Vercel
 
 1. Import `https://github.com/alicelokc/flashcard-system` in Vercel.
-2. Add environment variables:
+2. Switch Prisma `provider` to `postgresql` and set a Postgres `DATABASE_URL`.
+3. Add environment variables:
 
 | Name | Value |
 |------|--------|
-| `DATABASE_URL` | Postgres URL (Neon / Vercel Postgres / Supabase). For Neon pooler, `?sslmode=require` is typical. |
+| `DATABASE_URL` | Postgres URL (Neon / Vercel Postgres / Supabase) |
 | `NEXTAUTH_URL` | Your production URL, e.g. `https://flashcard-system.vercel.app` |
 | `NEXTAUTH_SECRET` | Long random string (`openssl rand -base64 32`) |
+| `GOOGLE_CLIENT_ID` | From Google Cloud Console |
+| `GOOGLE_CLIENT_SECRET` | From Google Cloud Console |
+| `TEACHER_EMAILS` | Comma-separated teacher emails |
 
-3. Deploy. After the first successful deploy (or before), sync schema + seed once:
+4. Add the production redirect URI in Google Cloud Console.
+5. Deploy, then sync schema + seed once:
 
 ```bash
-# with production env available locally, or via `vercel env pull`
 npx prisma db push
 npm run seed
 ```
-
-Or from any machine with `DATABASE_URL` set to the production DB:
-
-```bash
-DATABASE_URL="postgresql://..." npx prisma db push
-DATABASE_URL="postgresql://..." npm run seed
-```
-
-4. Open the Vercel URL and log in with the demo accounts above.
 
 `postinstall` / `build` both run `prisma generate`. `vercel.json` sets `buildCommand` to `prisma generate && next build`.
 
@@ -77,14 +78,14 @@ DATABASE_URL="postgresql://..." npm run seed
 |---------|---------|
 | `npm run dev` | Dev server |
 | `npm run build` / `npm start` | Production |
-| `npx prisma db push` | Sync schema → Postgres |
-| `npm run seed` | Reset & seed demo data (works against Postgres) |
+| `npx prisma db push` | Sync schema → DB |
+| `npm run seed` | Reset & seed sample data (Google login only) |
 | `npm test` | Unit tests (Vitest) |
 
 ## Features
 
-1. **Auth** — Teacher / Student roles; JWT sessions via NextAuth credentials.
-2. **Decks & cards (teacher)** — Create decks (auto-assign all students), add/edit cards with optional front/back images (URL or small upload).
+1. **Auth** — Google sign-in; `TEACHER_EMAILS` → TEACHER, else STUDENT. First Google sign-in creates the Prisma `User`.
+2. **Decks & cards (teacher)** — Create decks (auto-assign all students), add/**edit**/archive cards with optional front/back images (URL or small upload). Archive hides from study without deleting history.
 3. **Student submit + approval** — Students submit cards → `PENDING`. Teacher Approves/Rejects. On **Approve**, status → `APPROVED` and the card is visible to the **whole class**; `card_state` rows are created for each classmate.
 4. **SM-2 study** — Per-student card state. Due queue only includes **APPROVED** cards.
 5. **Unfamiliar** — Flag/unflag; dedicated list.
@@ -138,8 +139,9 @@ See `src/lib/leaderboard.ts`.
 ## Project layout
 
 ```
-prisma/schema.prisma   # PostgreSQL data model
-prisma/seed.ts         # demo users, deck, reviews, pending cards
+prisma/schema.prisma   # data model (sqlite local / postgres prod)
+prisma/seed.ts         # sample deck + cards (Google login)
+src/lib/auth.ts        # NextAuth Google + TEACHER_EMAILS
 src/lib/sm2.ts         # scheduling
 src/lib/streak.ts      # 儲火
 src/lib/leaderboard.ts # scoring
@@ -153,10 +155,10 @@ vercel.json            # buildCommand
 
 - No CSV bulk import UI
 - No per-user timezone (fixed Asia/Hong_Kong)
-- No email magic-link (credentials only)
 - Large images should use external URLs (data URL cap 500KB)
 - Leaderboard refresh is on page load (no websocket)
+- New Google students are not auto-assigned to existing decks (teacher may need to re-create / re-assign)
 
 ## License
 
-MIT — built for Alice (HK classroom demo).
+MIT — built for Alice (HK classroom).
