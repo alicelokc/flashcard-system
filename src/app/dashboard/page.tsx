@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { TeacherOnly } from "@/components/TeacherOnly";
 
 type Student = {
   id: string;
@@ -18,7 +19,7 @@ type Student = {
   lastStudyDate: string | null;
 };
 
-export default function DashboardPage() {
+function DashboardInner() {
   const [pending, setPending] = useState(0);
   const [students, setStudents] = useState<Student[]>([]);
 
@@ -85,5 +86,13 @@ export default function DashboardPage() {
         </table>
       </div>
     </div>
+  );
+}
+
+export default function DashboardPage() {
+  return (
+    <TeacherOnly>
+      <DashboardInner />
+    </TeacherOnly>
   );
 }

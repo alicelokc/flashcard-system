@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, Suspense } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { ProgressBar } from "@/components/ProgressBar";
 
@@ -23,6 +24,8 @@ function StudyInner() {
   const [done, setDone] = useState(0);
   const [loading, setLoading] = useState(true);
   const [sessionTotal, setSessionTotal] = useState(0);
+  const [dueCount, setDueCount] = useState(0);
+  const [deckTitle, setDeckTitle] = useState<string | null>(null);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -33,6 +36,7 @@ function StudyInner() {
       .then((d) => {
         setCards(d.cards || []);
         setSessionTotal((d.cards || []).length);
+        setDueCount(d.dueCount ?? (d.cards || []).length);
         setIdx(0);
         setFlipped(false);
         setDone(0);
@@ -43,6 +47,21 @@ function StudyInner() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    if (!deckId) {
+      setDeckTitle(null);
+      return;
+    }
+    fetch("/api/decks")
+      .then((r) => r.json())
+      .then((d) => {
+        if (!Array.isArray(d)) return;
+        const found = d.find((x: { id: string }) => x.id === deckId);
+        setDeckTitle(found?.title || null);
+      })
+      .catch(() => setDeckTitle(null));
+  }, [deckId]);
 
   async function rate(rating: 1 | 2 | 3 | 4) {
     const card = cards[idx];
@@ -93,11 +112,22 @@ function StudyInner() {
   if (!cards.length) {
     return (
       <div className="rounded-2xl border bg-white p-8 text-center shadow-sm">
-        <p className="text-xl font-semibold">今日已完成！🎉</p>
-        <p className="mt-2 text-slate-500">沒有到期的卡，或本輪已溫完。</p>
-        <button onClick={load} className="mt-4 rounded-lg bg-indigo-600 px-4 py-2 text-white">
-          重新整理
-        </button>
+        <p className="text-xl font-semibold">
+          {deckTitle ? `${deckTitle} · 暫時冇到期卡 🎉` : "今日已完成！🎉"}
+        </p>
+        <p className="mt-2 text-slate-500">
+          {deckId
+            ? "呢個 Chapter 而家冇到期／新卡。返主頁揀其他 Chapter，或者稍後再嚟（遺忘曲線會推返到期卡）。"
+            : "沒有到期的卡，或本輪已溫完。返主頁睇邊個 Chapter 有到期。"}
+        </p>
+        <div className="mt-4 flex flex-wrap justify-center gap-2">
+          <Link href="/" className="rounded-lg bg-indigo-600 px-4 py-2 text-white">
+            返回 Chapter 列表
+          </Link>
+          <button onClick={load} className="rounded-lg border px-4 py-2">
+            重新整理
+          </button>
+        </div>
       </div>
     );
   }
@@ -106,7 +136,17 @@ function StudyInner() {
 
   return (
     <div className="mx-auto max-w-lg space-y-4">
-      <h1 className="text-xl font-bold">溫習 Study</h1>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h1 className="text-xl font-bold">
+            {deckTitle ? `溫習 · ${deckTitle}` : "溫習全部到期"}
+          </h1>
+          <p className="text-xs text-slate-500">本輪 {sessionTotal} 張 · 到期統計 {dueCount}</p>
+        </div>
+        <Link href="/" className="text-sm text-indigo-600 hover:underline">
+          ← Chapter 列表
+        </Link>
+      </div>
       <ProgressBar value={done} max={sessionTotal || 1} label="本輪進度 Session" />
 
       <div className="card-flip">

@@ -9,7 +9,7 @@ export async function GET() {
 
   if (session.user.role === "TEACHER") {
     const decks = await prisma.deck.findMany({
-      orderBy: { updatedAt: "desc" },
+      orderBy: { title: "asc" },
       include: {
         _count: { select: { cards: true, assignments: true } },
         cards: { where: { status: "APPROVED", archived: false }, select: { id: true } },

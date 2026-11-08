@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { TeacherOnly } from "@/components/TeacherOnly";
 
 type Pending = {
   id: string;
@@ -12,12 +13,24 @@ type Pending = {
   submittedBy: { name: string; email: string } | null;
 };
 
-export default function ApprovalsPage() {
+function ApprovalsInner() {
   const [items, setItems] = useState<Pending[]>([]);
   const [reason, setReason] = useState<Record<string, string>>({});
+  const [error, setError] = useState("");
 
   function load() {
-    fetch("/api/approvals").then((r) => r.json()).then(setItems);
+    fetch("/api/approvals")
+      .then(async (r) => {
+        const d = await r.json();
+        if (!r.ok || !Array.isArray(d)) {
+          setError(d?.error || "無法載入");
+          setItems([]);
+          return;
+        }
+        setError("");
+        setItems(d);
+      })
+      .catch(() => setError("無法載入"));
   }
 
   useEffect(() => {
@@ -36,8 +49,9 @@ export default function ApprovalsPage() {
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-bold">審批 Approvals</h1>
-      <p className="text-sm text-slate-500">通過後該卡會加入卡組，全班都可溫習。</p>
-      {!items.length && <p className="text-slate-500">沒有待審批項目。</p>}
+      <p className="text-sm text-slate-500">通過後該卡會加入對應 Chapter，全班都可溫習。</p>
+      {error && <p className="text-sm text-red-600">{error}</p>}
+      {!items.length && !error && <p className="text-slate-500">沒有待審批項目。</p>}
       {items.map((it) => (
         <div key={it.id} className="rounded-2xl border bg-white p-4 shadow-sm">
           <p className="text-xs text-slate-500">
@@ -80,5 +94,13 @@ export default function ApprovalsPage() {
         </div>
       ))}
     </div>
+  );
+}
+
+export default function ApprovalsPage() {
+  return (
+    <TeacherOnly>
+      <ApprovalsInner />
+    </TeacherOnly>
   );
 }

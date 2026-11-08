@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { TeacherOnly } from "@/components/TeacherOnly";
 
 type Deck = {
   id: string;
@@ -11,14 +12,14 @@ type Deck = {
   _count?: { cards: number; assignments: number };
 };
 
-export default function DecksPage() {
+function DecksInner() {
   const [decks, setDecks] = useState<Deck[]>([]);
   const [title, setTitle] = useState("");
   const [subject, setSubject] = useState("Biology");
   const [description, setDescription] = useState("");
 
   function load() {
-    fetch("/api/decks").then((r) => r.json()).then(setDecks);
+    fetch("/api/decks").then((r) => r.json()).then((d) => { if (Array.isArray(d)) setDecks(d); });
   }
 
   useEffect(() => {
@@ -42,10 +43,10 @@ export default function DecksPage() {
       <h1 className="text-xl font-bold">卡組 Decks</h1>
 
       <form onSubmit={createDeck} className="space-y-3 rounded-2xl border bg-white p-4 shadow-sm">
-        <h2 className="font-semibold">新建卡組（自動分配全班）</h2>
+        <h2 className="font-semibold">新建 Chapter／卡組（自動分配全班）</h2>
         <input
           className="w-full rounded-lg border px-3 py-2"
-          placeholder="標題"
+          placeholder="例如 Chapter 38"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           required
@@ -85,5 +86,13 @@ export default function DecksPage() {
         ))}
       </ul>
     </div>
+  );
+}
+
+export default function DecksPage() {
+  return (
+    <TeacherOnly>
+      <DecksInner />
+    </TeacherOnly>
   );
 }

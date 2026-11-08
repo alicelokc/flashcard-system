@@ -1,6 +1,7 @@
 import type { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import { prisma } from "./prisma";
+import { assignAllDecksToStudent } from "./assign";
 
 // On Vercel, prefer explicit NEXTAUTH_URL; fall back to https://VERCEL_URL for previews.
 if (!process.env.NEXTAUTH_URL && process.env.VERCEL_URL) {
@@ -53,7 +54,7 @@ export const authOptions: NextAuthOptions = {
       const role = resolveRole(email);
       const existing = await prisma.user.findUnique({ where: { email } });
       if (!existing) {
-        await prisma.user.create({
+        const created = await prisma.user.create({
           data: {
             email,
             name: user.name?.trim() || email,
@@ -61,6 +62,9 @@ export const authOptions: NextAuthOptions = {
             role,
           },
         });
+        if (role === "STUDENT") {
+          await assignAllDecksToStudent(created.id);
+        }
       } else {
         await prisma.user.update({
           where: { id: existing.id },
@@ -71,6 +75,10 @@ export const authOptions: NextAuthOptions = {
             role,
           },
         });
+        // Late-joining / previously unassigned students get all chapter decks
+        if (role === "STUDENT") {
+          await assignAllDecksToStudent(existing.id);
+        }
       }
       return true;
     },

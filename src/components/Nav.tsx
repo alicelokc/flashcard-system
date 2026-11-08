@@ -6,7 +6,8 @@ import { signOut, useSession } from "next-auth/react";
 
 const studentLinks = [
   { href: "/", label: "主頁 Home" },
-  { href: "/study", label: "溫習 Study" },
+  { href: "/", label: "Chapter" },
+  { href: "/study", label: "到期 Due" },
   { href: "/unfamiliar", label: "未熟悉 Unfamiliar" },
   { href: "/leaderboard", label: "排行榜" },
   { href: "/submissions", label: "我的提交" },

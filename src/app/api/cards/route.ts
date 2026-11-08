@@ -86,8 +86,19 @@ export async function PATCH(req: NextRequest) {
   if (existing.submittedById !== session.user.id) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  if (existing.status === "APPROVED") {
-    return NextResponse.json({ error: "Cannot edit approved card" }, { status: 400 });
+  if (!["DRAFT", "REJECTED"].includes(existing.status)) {
+    return NextResponse.json(
+      { error: "Only draft or rejected cards can be edited" },
+      { status: 400 },
+    );
+  }
+
+  let nextStatus: string = existing.status;
+  if (submit) {
+    nextStatus = "PENDING";
+  } else if (existing.status === "REJECTED") {
+    // Saving edits on a rejected card turns it back into a draft
+    nextStatus = "DRAFT";
   }
 
   const card = await prisma.card.update({
@@ -97,8 +108,8 @@ export async function PATCH(req: NextRequest) {
       backText: backText?.trim() ?? existing.backText,
       frontImage: frontImage === undefined ? existing.frontImage : frontImage,
       backImage: backImage === undefined ? existing.backImage : backImage,
-      status: submit ? "PENDING" : existing.status === "REJECTED" && submit ? "PENDING" : existing.status,
-      rejectionReason: submit ? null : existing.rejectionReason,
+      status: nextStatus,
+      rejectionReason: nextStatus === "PENDING" || nextStatus === "DRAFT" ? null : existing.rejectionReason,
     },
   });
   return NextResponse.json(card);

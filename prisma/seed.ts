@@ -3,11 +3,23 @@ import { subDays } from "date-fns";
 
 const prisma = new PrismaClient();
 
+const CHAPTER_COUNT = 37;
+
+/** Light sample pairs so each chapter has something to study. */
+const SAMPLE_PAIRS: { front: string; back: string }[] = [
+  { front: "Mitochondrion", back: "Powerhouse of the cell; site of aerobic respiration" },
+  { front: "Ribosome", back: "Site of protein synthesis" },
+  { front: "Nucleus", back: "Contains DNA; controls cell activities" },
+  { front: "Chloroplast", back: "Site of photosynthesis in plant cells" },
+  { front: "Cell membrane", back: "Selectively permeable barrier around the cell" },
+  { front: "Enzyme", back: "Biological catalyst that speeds up reactions" },
+  { front: "Photosynthesis", back: "Process converting light energy into chemical energy" },
+  { front: "Diffusion", back: "Net movement of particles from high to low concentration" },
+];
+
 /**
- * Seed sample decks/cards for local demo.
- * Login is Google-only — credentials are gone.
- * Teacher user email comes from the first TEACHER_EMAILS entry so Alice's
- * Google sign-in reuses the same User row and owns the seeded decks.
+ * Seed 37 chapter decks for student-chosen study + SM-2 due push.
+ * Login is Google-only. Teacher email = first TEACHER_EMAILS entry.
  */
 async function main() {
   await prisma.reviewLog.deleteMany();
@@ -56,49 +68,48 @@ async function main() {
     },
   });
 
-  const deck = await prisma.deck.create({
-    data: {
-      title: "HKDSE Biology — Cell Structure",
-      subject: "Biology",
-      description: "基礎細胞結構詞彙與概念",
-      createdById: teacher.id,
-    },
-  });
+  const students = [student1, student2];
+  const allApprovedCards: { id: string; deckIndex: number }[] = [];
+  const decks: { id: string; index: number }[] = [];
 
-  await prisma.deckAssignment.createMany({
-    data: [
-      { deckId: deck.id, studentId: student1.id },
-      { deckId: deck.id, studentId: student2.id },
-    ],
-  });
-
-  const teacherCards = [
-    { front: "Mitochondrion", back: "Powerhouse of the cell; site of aerobic respiration", order: 1 },
-    { front: "Ribosome", back: "Site of protein synthesis", order: 2 },
-    { front: "Nucleus", back: "Contains DNA; controls cell activities", order: 3 },
-    { front: "Chloroplast", back: "Site of photosynthesis in plant cells", order: 4 },
-    { front: "Cell membrane", back: "Selectively permeable barrier around the cell", order: 5 },
-    { front: "Cytoplasm", back: "Jelly-like substance where organelles are suspended", order: 6 },
-  ];
-
-  const createdCards = [];
-  for (const c of teacherCards) {
-    const card = await prisma.card.create({
+  for (let n = 1; n <= CHAPTER_COUNT; n++) {
+    const title = `Chapter ${String(n).padStart(2, "0")}`;
+    const deck = await prisma.deck.create({
       data: {
-        deckId: deck.id,
-        frontText: c.front,
-        backText: c.back,
-        status: "APPROVED",
-        sortOrder: c.order,
+        title,
+        subject: "Biology",
+        description: `第 ${n} 章 · 學生可自行點選溫習`,
+        createdById: teacher.id,
       },
     });
-    createdCards.push(card);
+    decks.push({ id: deck.id, index: n });
+
+    await prisma.deckAssignment.createMany({
+      data: students.map((s) => ({ deckId: deck.id, studentId: s.id })),
+    });
+
+    // 2–3 sample cards per chapter (placeholders teachers can replace)
+    const cardCount = n <= 3 ? 3 : 2;
+    for (let i = 0; i < cardCount; i++) {
+      const pair = SAMPLE_PAIRS[(n + i) % SAMPLE_PAIRS.length];
+      const card = await prisma.card.create({
+        data: {
+          deckId: deck.id,
+          frontText: `${pair.front} (Ch.${n})`,
+          backText: pair.back,
+          status: "APPROVED",
+          sortOrder: i + 1,
+        },
+      });
+      allApprovedCards.push({ id: card.id, deckIndex: n });
+    }
   }
 
-  // Pending student submissions
+  // Pending submissions on Chapter 01 for approvals demo
+  const ch1 = decks[0]!.id;
   await prisma.card.create({
     data: {
-      deckId: deck.id,
+      deckId: ch1,
       frontText: "Golgi apparatus",
       backText: "Modifies, sorts and packages proteins for secretion",
       status: "PENDING",
@@ -106,10 +117,9 @@ async function main() {
       sortOrder: 100,
     },
   });
-
   await prisma.card.create({
     data: {
-      deckId: deck.id,
+      deckId: ch1,
       frontText: "Lysosome",
       backText: "Contains digestive enzymes; breaks down waste",
       status: "PENDING",
@@ -118,47 +128,48 @@ async function main() {
     },
   });
 
-  // One already approved student contribution
-  const approvedStudentCard = await prisma.card.create({
+  // Rejected card so submissions edit/resubmit can be demoed
+  await prisma.card.create({
     data: {
-      deckId: deck.id,
-      frontText: "Vacuole",
-      backText: "Storage sac; large central vacuole in plant cells",
-      status: "APPROVED",
+      deckId: ch1,
+      frontText: "Cell wall (draft)",
+      backText: "TODO: fix definition",
+      status: "REJECTED",
       submittedById: student1.id,
       reviewedById: teacher.id,
       reviewedAt: new Date(),
-      sortOrder: 7,
+      rejectionReason: "請補充植物細胞特有的功能說明",
+      sortOrder: 102,
     },
   });
-  createdCards.push(approvedStudentCard);
 
-  // Card states + review history for leaderboard demo
   const now = new Date();
-  for (const student of [student1, student2]) {
-    for (let i = 0; i < createdCards.length; i++) {
-      const card = createdCards[i];
-      const dueOffset = i < 3 ? -1 : i; // first 3 due
+  // SM-2 demo: first few cards of early chapters are due today
+  for (const student of students) {
+    for (let i = 0; i < allApprovedCards.length; i++) {
+      const card = allApprovedCards[i]!;
+      const isDueDemo = card.deckIndex <= 5 && i % 3 === 0;
       await prisma.cardState.create({
         data: {
           cardId: card.id,
           studentId: student.id,
           easeFactor: 2.5,
-          interval: i < 3 ? 1 : 3,
-          repetitions: i < 3 ? 1 : 2,
-          nextReview: subDays(now, -dueOffset),
+          interval: isDueDemo ? 1 : 4,
+          repetitions: isDueDemo ? 1 : 2,
+          nextReview: isDueDemo ? subDays(now, 1) : subDays(now, -3),
           lastResult: 3,
         },
       });
     }
   }
 
-  // Review logs this week
+  // Review logs this week (leaderboard)
+  const sampleIds = allApprovedCards.slice(0, 8).map((c) => c.id);
   for (let d = 0; d < 5; d++) {
     for (let r = 0; r < 4; r++) {
       await prisma.reviewLog.create({
         data: {
-          cardId: createdCards[r % createdCards.length].id,
+          cardId: sampleIds[r % sampleIds.length]!,
           studentId: student1.id,
           rating: r % 2 === 0 ? 3 : 4,
           reviewedAt: subDays(now, d),
@@ -168,7 +179,7 @@ async function main() {
     for (let r = 0; r < 2; r++) {
       await prisma.reviewLog.create({
         data: {
-          cardId: createdCards[r % createdCards.length].id,
+          cardId: sampleIds[r % sampleIds.length]!,
           studentId: student2.id,
           rating: r === 0 ? 2 : 3,
           reviewedAt: subDays(now, d),
@@ -177,22 +188,18 @@ async function main() {
     }
   }
 
-  // Unfamiliar flags
   await prisma.unfamiliarFlag.create({
-    data: { cardId: createdCards[0].id, studentId: student1.id },
-  });
-  await prisma.unfamiliarFlag.create({
-    data: { cardId: createdCards[3].id, studentId: student2.id },
+    data: { cardId: allApprovedCards[0]!.id, studentId: student1.id },
   });
 
-  console.log("Seed complete (Google login only — no password accounts):");
+  console.log("Seed complete — 37 chapter decks (Google login only):");
   console.log(`  Teacher user: ${teacherEmail} (must be in TEACHER_EMAILS)`);
+  console.log(`  Chapters: Chapter 01 … Chapter ${String(CHAPTER_COUNT).padStart(2, "0")}`);
   console.log("  Placeholder students: student1@seed.local, student2@seed.local");
-  console.log("  Real students sign in with Google and get STUDENT role automatically.");
+  console.log("  Real students sign in with Google → auto-assigned to all chapters.");
 }
 
 function formatHk(date: Date): string {
-  // Asia/Hong_Kong is UTC+8 year-round
   const hk = new Date(date.getTime() + 8 * 60 * 60 * 1000);
   return hk.toISOString().slice(0, 10);
 }

@@ -1,25 +1,55 @@
 "use client";
 
 import { signIn } from "next-auth/react";
-import { useState } from "react";
+import { Suspense, useState } from "react";
+import { useSearchParams } from "next/navigation";
 
-export default function LoginPage() {
+const ERROR_MESSAGES: Record<string, string> = {
+  OAuthSignin: "無法啟動 Google 登入。請檢查 OAuth 設定。",
+  OAuthCallback: "Google 回傳失敗。請確認 redirect URI 正確。",
+  OAuthCreateAccount: "無法建立帳戶，請再試一次。",
+  Callback: "登入回調錯誤。",
+  OAuthAccountNotLinked: "此電郵已用其他方式註冊。",
+  EmailSignin: "電郵登入失敗。",
+  CredentialsSignin: "登入失敗。",
+  SessionRequired: "請先登入。",
+  AccessDenied: "存取被拒。",
+  Configuration: "伺服器未設定好 Google Client ID／Secret。請聯絡老師。",
+  Default: "登入失敗，請再試一次。",
+};
+
+function LoginInner() {
   const [loading, setLoading] = useState(false);
+  const search = useSearchParams();
+  const errorCode = search.get("error");
+  const errorMsg = errorCode
+    ? ERROR_MESSAGES[errorCode] || `${ERROR_MESSAGES.Default}（${errorCode}）`
+    : null;
 
   async function loginWithGoogle() {
     setLoading(true);
-    await signIn("google", { callbackUrl: "/" });
+    try {
+      await signIn("google", { callbackUrl: "/" });
+    } catch {
+      setLoading(false);
+    }
   }
 
   return (
     <div className="mx-auto mt-10 max-w-md rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
       <h1 className="text-2xl font-bold text-indigo-700">🔥 FlashLearn HK</h1>
-      <p className="mt-1 text-sm text-slate-500">間隔重複閃卡 · 儲火 · 排行榜</p>
+      <p className="mt-1 text-sm text-slate-500">間隔重複閃卡 · Chapter 溫習 · 儲火 · 排行榜</p>
       <p className="mt-4 text-sm text-slate-600">
-        請用 Google 帳戶登入。老師電郵須列入{" "}
-        <code className="rounded bg-slate-100 px-1">TEACHER_EMAILS</code>
-        ；其餘為學生。
+        請用學校／個人 Google 帳戶登入。老師帳戶由校方設定；其他帳戶會以學生身分進入 37 個
+        Chapter。
       </p>
+
+      {errorMsg && (
+        <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          {errorMsg}
+        </div>
+      )}
+
       <button
         type="button"
         onClick={loginWithGoogle}
@@ -47,5 +77,13 @@ export default function LoginPage() {
         {loading ? "跳轉中…" : "使用 Google 登入 Sign in with Google"}
       </button>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<p className="mt-10 text-center text-slate-500">載入中…</p>}>
+      <LoginInner />
+    </Suspense>
   );
 }

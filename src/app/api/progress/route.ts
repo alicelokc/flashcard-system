@@ -51,7 +51,7 @@ export async function GET() {
     return NextResponse.json({ role: "TEACHER", pending, students: stats });
   }
 
-  // Student progress
+  // Student progress — chapter decks with mastery + due (forgetting-curve push)
   const user = await prisma.user.findUnique({ where: { id: session.user.id } });
   if (!user) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
@@ -70,25 +70,43 @@ export async function GET() {
         },
       },
     },
+    orderBy: { deck: { title: "asc" } },
   });
 
+  const now = Date.now();
   const decks = await Promise.all(
     assignments.map(async (a) => {
       const cardIds = a.deck.cards.map((c) => c.id);
       const states = await prisma.cardState.findMany({
         where: { studentId: user.id, cardId: { in: cardIds } },
       });
-      const due = states.filter((s) => s.nextReview.getTime() <= Date.now()).length;
+      const stateByCard = new Map(states.map((s) => [s.cardId, s]));
+      // No state yet = new card = due now (SM-2 will create state on study)
+      const due = cardIds.filter((id) => {
+        const s = stateByCard.get(id);
+        return !s || s.nextReview.getTime() <= now;
+      }).length;
+      const newCount = cardIds.filter((id) => !stateByCard.has(id)).length;
       return {
         id: a.deck.id,
         title: a.deck.title,
         subject: a.deck.subject,
+        description: a.deck.description,
         totalCards: cardIds.length,
         mastery: masteryPercent(states),
         due,
+        newCount,
       };
     })
   );
+
+  // Due chapters first, then chapter title order
+  decks.sort((a, b) => {
+    if (b.due !== a.due) return b.due - a.due;
+    return a.title.localeCompare(b.title, undefined, { numeric: true });
+  });
+
+  const totalDue = decks.reduce((sum, d) => sum + d.due, 0);
 
   const streak = resetIfBroken({
     currentStreak: user.currentStreak,
@@ -114,6 +132,7 @@ export async function GET() {
     currentStreak: effectiveCurrentStreak(streak, today),
     longestStreak: user.longestStreak,
     approvedContributions: approvedMine,
+    totalDue,
     decks,
   });
 }

@@ -1,6 +1,6 @@
 # FlashLearn HK — Spaced-Repetition Flashcards
 
-Production-minded **MVP** for teachers and students: create decks/cards, student submissions with teacher approval (class-wide), SM-2 study, unfamiliar flags, progress, 儲火 streaks, and a class leaderboard.
+Production-minded **MVP** for teachers and students: **37 Chapter decks**, students pick which chapter to study, SM-2 forgetting curve pushes due cards back into those chapters, teacher create/edit/approve, unfamiliar flags, 儲火 streaks, and a class leaderboard.
 
 **Auth: Google sign-in only** (NextAuth Google provider). Teachers are allowlisted via `TEACHER_EMAILS`.
 
@@ -45,7 +45,7 @@ Open http://localhost:3000 and click **使用 Google 登入**.
 4. Copy Client ID / Secret into `.env` as `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`.
 5. Set `TEACHER_EMAILS` to a comma-separated list of teacher Gmail addresses, e.g. `lokcalice@gmail.com`. Everyone else who signs in becomes a **STUDENT**.
 
-Seed creates sample decks/cards owned by the first email in `TEACHER_EMAILS` (so your Google teacher account sees them after login). Placeholder student rows (`student1@seed.local`) exist only for demo leaderboard data — real students use Google.
+Seed creates **Chapter 01–Chapter 37** decks (with light sample cards) owned by the first email in `TEACHER_EMAILS`. All seed students are assigned to every chapter. New Google students are auto-assigned to all existing decks + CardStates for approved cards. Placeholder student rows (`student1@seed.local`) are for demo leaderboard data only — real students use Google.
 
 ## Deploy to Vercel
 

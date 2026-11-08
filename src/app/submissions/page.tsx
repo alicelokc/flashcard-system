@@ -19,13 +19,27 @@ export default function SubmissionsPage() {
   const [front, setFront] = useState("");
   const [back, setBack] = useState("");
   const [msg, setMsg] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editFront, setEditFront] = useState("");
+  const [editBack, setEditBack] = useState("");
+  const [saving, setSaving] = useState(false);
 
   function load() {
-    fetch("/api/submissions").then((r) => r.json()).then(setCards);
-    fetch("/api/decks").then((r) => r.json()).then((d) => {
-      setDecks(d);
-      if (d[0]) setDeckId((prev) => prev || d[0].id);
-    });
+    fetch("/api/submissions")
+      .then((r) => r.json())
+      .then((d) => {
+        if (Array.isArray(d)) setCards(d);
+      });
+    fetch("/api/decks")
+      .then((r) => r.json())
+      .then((d) => {
+        if (!Array.isArray(d)) return;
+        const sorted = [...d].sort((a, b) =>
+          String(a.title).localeCompare(String(b.title), undefined, { numeric: true }),
+        );
+        setDecks(sorted);
+        if (sorted[0]) setDeckId((prev) => prev || sorted[0].id);
+      });
   }
 
   useEffect(() => {
@@ -49,12 +63,34 @@ export default function SubmissionsPage() {
     load();
   }
 
-  async function resubmit(id: string) {
-    await fetch("/api/cards", {
+  function startEdit(c: Card) {
+    setEditingId(c.id);
+    setEditFront(c.frontText);
+    setEditBack(c.backText);
+    setMsg("");
+  }
+
+  async function saveEdit(resubmit: boolean) {
+    if (!editingId) return;
+    setSaving(true);
+    setMsg("");
+    const res = await fetch("/api/cards", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, submit: true }),
+      body: JSON.stringify({
+        id: editingId,
+        frontText: editFront,
+        backText: editBack,
+        submit: resubmit,
+      }),
     });
+    setSaving(false);
+    if (!res.ok) {
+      setMsg("儲存失敗");
+      return;
+    }
+    setEditingId(null);
+    setMsg(resubmit ? "已改好並重新提交審批 ✅" : "已儲存修改");
     load();
   }
 
@@ -115,27 +151,73 @@ export default function SubmissionsPage() {
       </div>
 
       <ul className="space-y-3">
-        {cards.map((c) => (
-          <li key={c.id} className="rounded-xl border bg-white p-4">
-            <p className="text-xs text-slate-500">{c.deck.title}</p>
-            <p className="font-medium">{c.frontText}</p>
-            <p className="text-slate-600">{c.backText}</p>
-            <p className="mt-1 text-sm">
-              狀態：<span className="font-semibold">{statusLabel[c.status] || c.status}</span>
-            </p>
-            {c.rejectionReason && (
-              <p className="text-sm text-red-600">原因：{c.rejectionReason}</p>
-            )}
-            {(c.status === "DRAFT" || c.status === "REJECTED") && (
-              <button
-                onClick={() => resubmit(c.id)}
-                className="mt-2 text-sm text-indigo-600 hover:underline"
-              >
-                重新提交審批
-              </button>
-            )}
-          </li>
-        ))}
+        {cards.map((c) => {
+          const canEdit = c.status === "DRAFT" || c.status === "REJECTED";
+          const isEditing = editingId === c.id;
+          return (
+            <li key={c.id} className="rounded-xl border bg-white p-4">
+              <p className="text-xs text-slate-500">{c.deck.title}</p>
+              {isEditing ? (
+                <div className="mt-2 space-y-2">
+                  <input
+                    className="w-full rounded-lg border px-3 py-2"
+                    value={editFront}
+                    onChange={(e) => setEditFront(e.target.value)}
+                    placeholder="正面"
+                  />
+                  <textarea
+                    className="w-full rounded-lg border px-3 py-2"
+                    value={editBack}
+                    onChange={(e) => setEditBack(e.target.value)}
+                    rows={3}
+                    placeholder="背面"
+                  />
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={() => saveEdit(false)}
+                      disabled={saving || !editFront.trim() || !editBack.trim()}
+                      className="rounded-lg border px-3 py-1.5 text-sm"
+                    >
+                      儲存修改
+                    </button>
+                    <button
+                      onClick={() => saveEdit(true)}
+                      disabled={saving || !editFront.trim() || !editBack.trim()}
+                      className="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm text-white"
+                    >
+                      儲存並重新提交
+                    </button>
+                    <button
+                      onClick={() => setEditingId(null)}
+                      className="rounded-lg px-3 py-1.5 text-sm text-slate-500"
+                    >
+                      取消
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <p className="font-medium">{c.frontText}</p>
+                  <p className="text-slate-600">{c.backText}</p>
+                </>
+              )}
+              <p className="mt-1 text-sm">
+                狀態：<span className="font-semibold">{statusLabel[c.status] || c.status}</span>
+              </p>
+              {c.rejectionReason && (
+                <p className="text-sm text-red-600">原因：{c.rejectionReason}</p>
+              )}
+              {canEdit && !isEditing && (
+                <button
+                  onClick={() => startEdit(c)}
+                  className="mt-2 text-sm text-indigo-600 hover:underline"
+                >
+                  編輯後再提交
+                </button>
+              )}
+            </li>
+          );
+        })}
       </ul>
     </div>
   );
